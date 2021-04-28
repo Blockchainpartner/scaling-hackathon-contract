@@ -5,21 +5,18 @@ from starkware.cairo.common.math import assert_not_zero
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.alloc import alloc
 
-struct PassengerInfo:
-    member name: felt
-end
 
-func processPassenger{pedersen_ptr : HashBuiltin*}(passengersPtr: PassengerInfo*, expected: felt) -> (success: felt, outputHash: felt):
+func checkIdentity{pedersen_ptr: HashBuiltin*}(address: felt, identity: felt*) -> (success: felt, outputHash: felt):
     alloc_locals
     local secret
-    assert_not_zero(passengersPtr.name)
+    assert_not_zero(address)
 
-    %{ ids.secret = program_input['secret'] %}
+    %{ ids.secret = int(program_input['secret'], 10) %}
 
     let output = 0
-    let (res) = hash2{hash_ptr=pedersen_ptr}(passengersPtr.name, secret)
+    let (res) = hash2{hash_ptr=pedersen_ptr}(address, secret)
     
-    if res == expected:
+    if res == [identity]:
         let (outputHash) = hash2{hash_ptr=pedersen_ptr}(res, secret)
         return (1, outputHash)
     end
@@ -27,66 +24,76 @@ func processPassenger{pedersen_ptr : HashBuiltin*}(passengersPtr: PassengerInfo*
 end
 
 ############################################################################### 
-#  processPassengers: for each passager, check if it's me, MARIO
+#  processRegistry: for each adresse in the registry, we will check if
+#  the pedersen hash of (address, secret) matches one element of the identities
+#  This function is a loop.
 ############################################################################### 
-func processPassengers{pedersen_ptr: HashBuiltin*}(passengers: PassengerInfo*, nPassengers: felt, expected: felt) -> (success: felt, outputHash: felt):
-    if nPassengers == 0:
-        return (0, 0)
+func processRegistry{pedersen_ptr: HashBuiltin*}(registry: felt*, n_r: felt, address: felt) -> (outputHash: felt):
+    if n_r == 0:
+        return (0)
     end
 
-    let (result, outputHash) = processPassenger(passengersPtr=passengers, expected=expected)
+    let (result, outputHash) = checkIdentity(address, registry)
     if result == 1:
-        return (1, outputHash)
+        return (outputHash)
     end
 
-    let (result, outputHash) = processPassengers(passengers=passengers + PassengerInfo.SIZE, nPassengers=nPassengers - 1, expected=expected)
-    return (result, outputHash)
+    let (outputHash) = processRegistry(registry + 1, n_r - 1, address)
+    return (outputHash)
 end
 
 ############################################################################### 
-#  getPassengerNames: Retrieve the list of all the passengers
+#  getRegistry: Retrieve the list of all the encrypted address in the registry
 ############################################################################### 
-func getPassengerNames() -> (passengerList: PassengerInfo*, n: felt):
+func computeRegistryHash{pedersen_ptr: HashBuiltin*}(registry: felt*, size: felt, tempHash: felt) -> (registryHash: felt):
+    if size == 0:
+        return (tempHash)
+    end
+
+    let (tempHash) = hash2{hash_ptr=pedersen_ptr}(tempHash, [registry])
+    let (tempHash) = computeRegistryHash(registry + 1, size - 1, tempHash)
+    return (tempHash)
+end
+
+func getRegistry() -> (list: felt*, n: felt):
     alloc_locals
     local n
-    let (passengers: PassengerInfo*) = alloc()
+    let (registry: felt*) = alloc()
     %{
         index = 0
-        ids.n = len(program_input['passengers'])
-        for key in program_input['passengers']:
-            base_addr = ids.passengers.address_ + ids.PassengerInfo.SIZE * index
-            memory[base_addr + ids.PassengerInfo.name] = key
-            # memory[base_addr + ids.PassengerInfo.name] = int(key, 16) //ONLY IF HEX STRING
+        ids.n = len(program_input['registry'])
+        for key in program_input['registry']:
+            base_addr = ids.registry + index
+            memory[base_addr] = int(key, 16)
             index += 1
     %}
-    return (passengerList=passengers, n=n)
+    return (list=registry, n=n)
 end
 
 ############################################################################### 
 #  Entry point, main function, wich will returns the Output struct
 ############################################################################### 
-func main{output_ptr: felt*, pedersen_ptr : HashBuiltin*} ():
+func main{output_ptr: felt*, pedersen_ptr: HashBuiltin*} ():
     alloc_locals
+    local address
     let output = cast(output_ptr, Output*)
     let output_ptr = output_ptr + Output.SIZE
 
-    local   expected
-    %{
-        registry = program_input['registry']
-        for address, account in registry.items():
-            if address == program_input['missa']:
-                ids.expected = int(account['name'], 16)
-                break
-    %}
+    %{ids.address = int(program_input['address'], 16)%}
+    assert_not_zero(address)
 
-    assert_not_zero(expected)
+    let (registry, n_r) = getRegistry()
+    local registry: felt* = registry
+    local n_r: felt = n_r
 
-    let (passengers, n) = getPassengerNames()
-    let (success, outputHash) = processPassengers(passengers, n, expected)
-
+    let (outputHash) = processRegistry(registry, n_r, address)
+    local outputHash: felt = outputHash
     assert_not_zero(outputHash)
-    assert output.success = success
+
+    let (registryHash) = computeRegistryHash(registry, n_r, 0)
+
     assert output.hash = outputHash
+    assert output.registryHash = registryHash
     return ()
 end
 
@@ -95,5 +102,5 @@ end
 ############################################################################### 
 struct Output:
     member hash: felt
-    member success: felt
+    member registryHash: felt
 end
