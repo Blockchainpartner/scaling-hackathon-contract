@@ -161,3 +161,55 @@ updateRegistry(
 ```
 
 And the [TX is here](https://ropsten.etherscan.io/tx/0xd3263c34b3509ad131e86c04a34ebf66162a3197b9a8f9bebaa9650e527019d2), with a new hash in the smartContract for the registryKey `123456` : `2891315351235761713911261574406955722432124089395428512307245557885601607598`
+
+------------------
+
+## 5 - Proving i'm IN !
+In order to prove that I am in this registry, we will use the second Cairo Program (the one with the following hash: `0x505ae0c3821ab690edb0fe45a63615f3600e168f3e60da824af1f28df54ecb1`). The idea is to prove that from my address and my secret (I am the only one to know theses informations), I can retrieve one of the entry on the registry.  
+In order to do that we will need a new input file with my `secret`, my `addresse`, and the public registry of all the addresses registered.  
+Let's say my address is `0x9E63B020ae098E73cF201EE1357EDc72DFEaA518`. With the table above, we can retrieve my secret, aka `3262016890316122496475965907754361478299744245975029426120053541882877319917`. Obviously, theses informations are here only for the purpose of this example.  
+```json
+{
+	"secret": "3262016890316122496475965907754361478299744245975029426120053541882877319917",
+	"address": "0x9E63B020ae098E73cF201EE1357EDc72DFEaA518",
+	"registry": [
+		"0x6a3044f3172368c38bf9e73393275fd7e50a5e951ff8c09e4dd7b22d95a34f5",
+		"0x6ed120ae443c419aee7e3ee2c98575edef4612ad381fe88d817f04e9e5911ae",
+		"0x138e341ac1472ad700053c6a0e0fcdf41e7e4851ba2917fa9075f5e31e5ee2e",
+		"0x755bf706ee73a22d3720569d0d3e4a7f9d28de4993a3b9c98014831c520a210",
+		"0x53465c95bcfb00da727a9ffd24c5bf324329de9fc27c57e53a86a23cfda1044",
+		"0x84afc9b9cdd81df7574ff788449dc3b6c0d6b5cf8a8f8f7536332d28b0add9",
+		"0x2c3dfa2e5c789f23006973dabc65c817704156344d2fb49aac7f237fb96c6ab",
+		"0x3da30f7925ce33a7e93b186b8bd52ff7f64c52a42d79bebe891e132cb3d2b77"
+	]
+}
+```
+With this `input.json` file, I can run the following command to get the output bellow : `cairo-run --program=cairo.json --print_output --layout=small --program_input=input.json`.
+```
+Program output:
+  829738850691260145934808358025321514871032962339753968951012900191018601261
+  -727187437430369499786061208688114383190983125936168187665846498250270412883
+```
+This output contains 2 informations needed to prove the information :
+- `829738850691260145934808358025321514871032962339753968951012900191018601261` is a specific hash corresponding to the element in the registry I match + my secret. In our case it's `hash(0x2c3dfa2e5c789f23006973dabc65c817704156344d2fb49aac7f237fb96c6ab, 3262016890316122496475965907754361478299744245975029426120053541882877319917)`.
+- `-727187437430369499786061208688114383190983125936168187665846498250270412883` is the registry hash.
+
+Just like we did for the registry update, we will prove this with the Sharp Prover with `cairo-sharp submit --program cairo.json --program_input input.json`
+```
+Running...
+Submitting to SHARP...
+Job sent.
+Job key: 866a23ce-2320-4233-99cc-9dd06ad7c889
+Fact: 0xabab4d2b54dd76e3b6095d6b9a1351aace18e8e9f07696e5f9d00c2a8d689bca
+```
+
+And then, we will [submit a new transaction](https://ropsten.etherscan.io/tx/0x17ba3a1630131b1e5459c8d2897b24e88d13a44dce98f862f4d636994900d419) to prove our fact :
+```
+proveIdentity(
+	123456,
+	829738850691260145934808358025321514871032962339753968951012900191018601261,
+	2891315351235761713911261574406955722432124089395428512307245557885601607598
+)
+```
+
+And the transaction is proved. That's it.

@@ -32,13 +32,9 @@ contract CairoProver is Ownable {
         return (fact);
     }
 
-    function proveIdentity(uint256 registryKey, uint256 hash, uint256 registryHash) public returns (bytes32) {
+    function proveIdentity(uint256 registryKey, uint256 hash, uint256 registryHash) public view returns (bool) {
         bytes32 outputHash = keccak256(abi.encodePacked(hash, registryHash));
         bytes32 fact = keccak256(abi.encodePacked(identitiesProgramHash, outputHash));
-        require(CAIRO_VERIFIER.isValid(fact), "INVALID_PROOF");
-        require(registriesHash[registryKey] == registryHash);
-
-        emit Prove(hash, fact);
-        return (fact);
+        return registriesHash[registryKey] == registryHash && CAIRO_VERIFIER.isValid(fact);
     }
 }
