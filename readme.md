@@ -1,5 +1,9 @@
 # Scaling Hackathon by Blockchain Partner
 
+⚠️  
+⚠️ Outdated. Please use [this repo](https://github.com/Blockchainpartner/scaling-hackathon-backend) to check the Cairo program and the Solidity contract ! ⚠️  
+⚠️  
+
 ## Stack
 - Solidity
 - Cairo
